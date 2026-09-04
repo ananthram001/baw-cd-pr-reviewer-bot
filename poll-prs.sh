@@ -110,9 +110,10 @@ $DIFF_TRIMMED
 \`\`\`"
 
     log "Sending diff to IBM Bob AI..."
-    REVIEW=$(bob --auth-method api-key \
-                 --hide-intermediary-output \
-                 -p "$PROMPT" 2>>"$LOG_FILE") || {
+    REVIEW=$(bob run --log-level silent \
+                 --disable-mcp \
+                 --disable-subagents \
+                 "$PROMPT" 2>>"$LOG_FILE") || {
       log "ERROR: Bob AI review failed for PR #$PR_NUMBER"
       continue
     }
