@@ -149,7 +149,13 @@ PR Title: $PR_TITLE
 - Summarise: what was the root cause, what the fix does, and whether the fix fully addresses the root cause or is a partial workaround.
 - Note if a similar pattern exists elsewhere in the codebase that may need the same fix.
 
-### 4. 🧪 Test Coverage
+### 4. ⚡ Performance (new code only)
+- Look only at the newly added lines (lines starting with + in the diff).
+- Flag any performance concerns introduced by the new code only — do not comment on pre-existing code.
+- Look for: unnecessary loops over large collections, repeated expensive calls inside loops, blocking operations, redundant file reads/writes, missing caching opportunities, spawning excessive subprocesses.
+- If no performance issues in the new code, write: '✅ No issues found in new code.'
+
+### 5. 🧪 Test Coverage
 - Check if the PR includes tests for the changed behaviour.
 - If not, suggest specific test cases — especially for the backward compatibility paths identified in point 2.
 
