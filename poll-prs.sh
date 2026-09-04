@@ -124,13 +124,20 @@ $DIFF_TRIMMED
 \`\`\`"
 
     log "Sending diff to IBM Bob AI..."
-    REVIEW=$(bob run --log-level silent \
+    BOB_OUTPUT=$(bob run --log-level silent \
                  --disable-mcp \
                  --disable-subagents \
                  "$PROMPT" 2>>"$LOG_FILE") || {
       log "ERROR: Bob AI review failed for PR #$PR_NUMBER"
       continue
     }
+    # Bob pretty output contains "Assistant (N) ... ────" sections
+    # Extract everything between the last "Assistant (N)" header and the "Task Summary" footer
+    REVIEW=$(echo "$BOB_OUTPUT" | awk '/^Assistant \([0-9]+\)/{found=1; buf=""; next} found && /^Task Summary/{exit} found{buf=buf"\n"$0} END{print buf}' | sed 's/^[[:space:]]*//')
+    if [[ -z "$REVIEW" ]]; then
+      # Fallback: strip the header/footer separator lines, keep the middle
+      REVIEW=$(echo "$BOB_OUTPUT" | grep -v '^─\+$' | grep -v '^Task Summary' | grep -v '^Total ' | grep -v '^Assistant Messages' | grep -v '^Tool Calls' | grep -v '^Task ID' | sed '/^User ([0-9]*)/,/^Assistant ([0-9]*)/d' | sed '/^\s*$/N;/^\n$/d')
+    fi
 
     # ── Post comment via bot identity ─────────────────────────────────────
     COMMENT_BODY="## 🤖 BAW-CD PR Review Bot
