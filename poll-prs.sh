@@ -124,19 +124,45 @@ $DIFF_TRIMMED
 \`\`\`"
 
     log "Sending diff to IBM Bob AI..."
-    BOB_OUTPUT=$(bob run --log-level silent \
-                 --disable-mcp \
-                 --disable-subagents \
-                 "$PROMPT" 2>>"$LOG_FILE") || {
+    # Write prompt to temp file — avoids shell quoting issues with large diffs
+    PROMPT_FILE=$(mktemp /tmp/bob_prompt_XXXXXX.txt)
+    BOB_OUT_FILE=$(mktemp /tmp/bob_out_XXXXXX.txt)
+    echo "$PROMPT" > "$PROMPT_FILE"
+
+    bob run --log-level silent \
+        --disable-mcp \
+        --disable-subagents \
+        "$(cat "$PROMPT_FILE")" > "$BOB_OUT_FILE" 2>>"$LOG_FILE" || {
       log "ERROR: Bob AI review failed for PR #$PR_NUMBER"
+      rm -f "$PROMPT_FILE" "$BOB_OUT_FILE"
       continue
     }
-    # Bob pretty output contains "Assistant (N) ... ────" sections
-    # Extract everything between the last "Assistant (N)" header and the "Task Summary" footer
-    REVIEW=$(echo "$BOB_OUTPUT" | awk '/^Assistant \([0-9]+\)/{found=1; buf=""; next} found && /^Task Summary/{exit} found{buf=buf"\n"$0} END{print buf}' | sed 's/^[[:space:]]*//')
+    rm -f "$PROMPT_FILE"
+
+    # Bob pretty output structure:
+    #   <separator line of ─ chars>
+    #   User (N) <timestamp>
+    #   <prompt text>
+    #   <separator line of ─ chars>
+    #   Assistant (N) <timestamp>
+    #   <REVIEW TEXT WE WANT>
+    #   <separator line of ─ chars>
+    #   Task Summary
+    #   ...
+    #
+    # Strategy: grab everything after the LAST "Assistant (" line, stop at "Task Summary"
+    REVIEW=$(awk '
+      /Assistant \(/ { found=1; buf=""; next }
+      found && /^Task Summary/ { exit }
+      found { buf = buf $0 "\n" }
+      END { printf "%s", buf }
+    ' "$BOB_OUT_FILE" | sed '/^[[:space:]]*$/{ N; /^\n[[:space:]]*$/d }' | sed 's/^[[:space:]]*//')
+
+    rm -f "$BOB_OUT_FILE"
+
     if [[ -z "$REVIEW" ]]; then
-      # Fallback: strip the header/footer separator lines, keep the middle
-      REVIEW=$(echo "$BOB_OUTPUT" | grep -v '^─\+$' | grep -v '^Task Summary' | grep -v '^Total ' | grep -v '^Assistant Messages' | grep -v '^Tool Calls' | grep -v '^Task ID' | sed '/^User ([0-9]*)/,/^Assistant ([0-9]*)/d' | sed '/^\s*$/N;/^\n$/d')
+      log "WARNING: Could not extract review text from Bob output for PR #$PR_NUMBER"
+      REVIEW="Bob AI processed this PR but the review output could not be parsed. Check /opt/baw-cd-pr-reviewer-bot/logs/review.log for details."
     fi
 
     # ── Post comment via bot identity ─────────────────────────────────────
