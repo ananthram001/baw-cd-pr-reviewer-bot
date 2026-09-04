@@ -11,6 +11,10 @@ set -euo pipefail
 export BOBSHELL_API_KEY
 export GH_TOKEN
 
+# GitHub username of the bot account — only review PRs where this user is a requested reviewer
+# Set to empty string "" to review ALL open PRs regardless
+BOT_GITHUB_USER="${BOT_GITHUB_USER:-ananthram001}"
+
 # ── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR="/opt/baw-cd-pr-reviewer-bot"
 STATE_DIR="$BASE_DIR/state"
@@ -43,9 +47,15 @@ for REPO in "${REPOS[@]}"; do
   REPO=$(echo "$REPO" | xargs)  # trim whitespace
   log "--- Checking $REPO ---"
 
-  # Fetch all open non-draft PRs
+  # Fetch open non-draft PRs — filtered to ones requesting the bot as reviewer (if BOT_GITHUB_USER set)
+  if [[ -n "$BOT_GITHUB_USER" ]]; then
+    JQ_FILTER=".[] | select(.draft == false) | select(.requested_reviewers[]?.login == \"$BOT_GITHUB_USER\") | \"\(.number) \(.head.sha) \(.title)\""
+  else
+    JQ_FILTER='.[] | select(.draft == false) | "\(.number) \(.head.sha) \(.title)"'
+  fi
+
   PR_LIST=$(gh api "repos/$REPO/pulls?state=open&per_page=50" \
-    --jq '.[] | select(.draft == false) | "\(.number) \(.head.sha) \(.title)"' \
+    --jq "$JQ_FILTER" \
     2>>"$LOG_FILE") || {
     log "ERROR: Could not fetch PRs for $REPO (check token permissions)"
     continue
