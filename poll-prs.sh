@@ -51,9 +51,14 @@ for REPO in "${REPOS[@]}"; do
   REPO=$(echo "$REPO" | xargs)  # trim whitespace
   log "--- Checking $REPO ---"
 
-  # Fetch open non-draft PRs — filtered to ones requesting the bot as reviewer (if BOT_GITHUB_USER set)
+  # Fetch open non-draft PRs:
+  #   - PRs where BOT_GITHUB_USER is a requested reviewer, OR
+  #   - PRs authored by BOT_GITHUB_USER (can't self-request review)
   if [[ -n "$BOT_GITHUB_USER" ]]; then
-    JQ_FILTER=".[] | select(.draft == false) | select(.requested_reviewers[]?.login == \"$BOT_GITHUB_USER\") | \"\(.number) \(.head.sha) \(.title)\""
+    JQ_FILTER=".[] | select(.draft == false) | select(
+      (.requested_reviewers[]?.login == \"$BOT_GITHUB_USER\") or
+      (.user.login == \"$BOT_GITHUB_USER\")
+    ) | \"\(.number) \(.head.sha) \(.title)\""
   else
     JQ_FILTER='.[] | select(.draft == false) | "\(.number) \(.head.sha) \(.title)"'
   fi
