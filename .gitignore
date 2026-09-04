@@ -1,0 +1,9 @@
+# Credentials — never commit this file
+config.env
+
+# State files (runtime)
+state/
+logs/
+
+# OS
+.DS_Store
