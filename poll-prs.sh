@@ -11,6 +11,10 @@ set -euo pipefail
 export BOBSHELL_API_KEY
 export GH_TOKEN
 
+# GitHub host — set to github.ibm.com for IBM internal GHE, or github.com for public
+GH_HOST="${GH_HOST:-github.com}"
+export GH_HOST
+
 # GitHub username of the bot account — only review PRs where this user is a requested reviewer
 # Set to empty string "" to review ALL open PRs regardless
 BOT_GITHUB_USER="${BOT_GITHUB_USER:-ananthram001}"
@@ -54,7 +58,7 @@ for REPO in "${REPOS[@]}"; do
     JQ_FILTER='.[] | select(.draft == false) | "\(.number) \(.head.sha) \(.title)"'
   fi
 
-  PR_LIST=$(gh api "repos/$REPO/pulls?state=open&per_page=50" \
+  PR_LIST=$(gh api --hostname "$GH_HOST" "repos/$REPO/pulls?state=open&per_page=50" \
     --jq "$JQ_FILTER" \
     2>>"$LOG_FILE") || {
     log "ERROR: Could not fetch PRs for $REPO (check token permissions)"
@@ -83,7 +87,7 @@ for REPO in "${REPOS[@]}"; do
     log "Reviewing PR #$PR_NUMBER: $PR_TITLE"
 
     # ── Fetch diff ────────────────────────────────────────────────────────
-    DIFF=$(gh api "repos/$REPO/pulls/$PR_NUMBER" \
+    DIFF=$(gh api --hostname "$GH_HOST" "repos/$REPO/pulls/$PR_NUMBER" \
       -H "Accept: application/vnd.github.v3.diff" 2>>"$LOG_FILE") || {
       log "ERROR: Could not fetch diff for PR #$PR_NUMBER"
       continue
@@ -137,7 +141,7 @@ $TRUNCATED_MSG
 ---
 *Posted by **baw-cd-pr-reviewer-bot** · Powered by IBM Bob AI · $(date '+%Y-%m-%d %H:%M %Z')*"
 
-    gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+    gh api --hostname "$GH_HOST" "repos/$REPO/issues/$PR_NUMBER/comments" \
       --method POST \
       --field body="$COMMENT_BODY" >> "$LOG_FILE" 2>&1 && {
       log "✅ Review posted for PR #$PR_NUMBER in $REPO"
